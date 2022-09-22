@@ -212,8 +212,8 @@ async function attemptToBook({ page, name }) {
       try {
         if (ACTUALLY_SEND_ALERTS) {
           let promises = [];
-          if (useTwilio) promises.push(twilio.messages.create(SMS_MESSAGE));
-          if (useSendgrid) promises.push(sendgrid.send(EMAIL_MESSAGE));
+          SMS_MESSAGE && promises.push(twilio.messages.create(SMS_MESSAGE));
+          EMAIL_MESSAGE && promises.push(sendgrid.send(EMAIL_MESSAGE));
           const responses = await Promise.all(promises);
           info(`ALERT(S) sent successfully.`, name);
           
