@@ -171,7 +171,7 @@ async function checkForGlobalSuccess({ page, name }) {
   return true;
 }
 
-async function timeout(ms) {
+async function timeout() {
   return new Promise((resolve) => setTimeout(resolve, SECONDS_BETWEEN_TRIES * 1000));
 }
 
@@ -195,7 +195,7 @@ async function attemptToBook({ page, name }) {
     }
 
     info(`Awaiting navigation to booking URL...`, name);
-    await timeout(6000);
+    await timeout();
     await page.goto(URLS.BOOKING, GOTO_OPTIONS);
     info(`Navigation attempt complete.`, name);
 
