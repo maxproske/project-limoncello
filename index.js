@@ -1,6 +1,7 @@
 /* eslint-disable no-constant-condition */
 const puppeteer = require("puppeteer");
 const sendgrid = require("@sendgrid/mail");
+const Twilio = require("twilio");
 const dotenv = require("dotenv");
 
 dotenv.config();
@@ -8,32 +9,61 @@ dotenv.config();
 // Secrets
 const USERNAME = process.env.SITE_USERNAME;
 const PASSWORD = process.env.SITE_PASSWORD;
+// SENDGRID SECRETS
 const EMAIL_TO = process.env.EMAIL_TO;
 const EMAIL_FROM = process.env.EMAIL_FROM;
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
+// TWILIO SECRETS
+const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
+const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
+const TWILIO_PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER;
+const MY_PHONE_NUMBER = process.env.MY_PHONE_NUMBER;
 
-sendgrid.setApiKey(SENDGRID_API_KEY);
+let twilio;
+let SMS_MESSAGE;
+let EMAIL_MESSAGE;
+
+const useTwilio = TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN;
+const useSendgrid = SENDGRID_API_KEY && EMAIL_TO && EMAIL_FROM;
+if (useTwilio) {
+  twilio = Twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+  SMS_MESSAGE = {
+    to: MY_PHONE_NUMBER,
+    from: TWILIO_PHONE_NUMBER,
+    body: `SUCCESS! Italy Site Script has reached booking page. GO GO GO!`,
+  }
+}
+if (useSendgrid) {
+  sendgrid.setApiKey(SENDGRID_API_KEY);
+  EMAIL_MESSAGE = {
+    to: EMAIL_TO,
+    from: EMAIL_FROM,
+    subject: "ITALY SITE SCRIPT HAS REACHED BOOKING PAGE",
+    text: "GO GO GO GO GO GO GO GO GO",
+  };
+}
 
 // Config
 const NUM_TABS = 1;
 const NUM_ATTEMPTS = -1; // Set to -1 to attempt indefinitely
-const ACTUALLY_SEND_EMAIL = true;
+const ACTUALLY_SEND_ALERTS = true;
 
 // Global vars
 let SUCCESS = false;
 let SUCCESS_PAGE = "";
-let EMAIL_SENT = false;
+let ALERTS_SENT = false;
 
 // Constants
 const GOTO_OPTIONS = {
   waitUntil: "networkidle2",
 };
+const SECONDS_BETWEEN_TRIES = 5;
 
 const URLS = {
   LANG_ENGLISH: "https://prenotami.esteri.it/Language/ChangeLanguage?lang=2",
   LOGIN: "https://prenotami.esteri.it/Home",
   LANDING: "https://prenotami.esteri.it/UserArea",
-  BOOKING: "https://prenotami.esteri.it/Services/Booking/489", //489 is real URL, 492 is test
+  BOOKING: "https://prenotami.esteri.it/Services/Booking/672", //672 is real URL, 660 is test
 };
 
 const SELECTORS = {
@@ -141,6 +171,10 @@ async function checkForGlobalSuccess({ page, name }) {
   return true;
 }
 
+async function timeout(ms) {
+  return new Promise((resolve) => setTimeout(resolve, SECONDS_BETWEEN_TRIES * 1000));
+}
+
 async function attemptToBook({ page, name }) {
   const { BOOKING } = URLS;
 
@@ -161,6 +195,7 @@ async function attemptToBook({ page, name }) {
     }
 
     info(`Awaiting navigation to booking URL...`, name);
+    await timeout(6000);
     await page.goto(URLS.BOOKING, GOTO_OPTIONS);
     info(`Navigation attempt complete.`, name);
 
@@ -169,23 +204,22 @@ async function attemptToBook({ page, name }) {
     if (await checkUrl({ page, name }, BOOKING)) {
       SUCCESS = true;
       SUCCESS_PAGE = name;
-      info(`SUCCESS! Sending email...`, name);
+      info(`SUCCESS! Sending ALERT(S)...`, name);
 
-      const email = {
-        to: EMAIL_TO,
-        from: EMAIL_FROM,
-        subject: "ITALY SITE SCRIPT HAS REACHED BOOKING PAGE",
-        text: "GO GO GO GO GO GO GO GO GO",
-      };
 
-      if (EMAIL_SENT) return true;
+      if (ALERTS_SENT) return true;
 
       try {
-        if (ACTUALLY_SEND_EMAIL) {
-          const response = await sendgrid.send(email);
+        if (ACTUALLY_SEND_ALERTS) {
+          let promises = [];
+          if (useTwilio) promises.push(twilio.messages.create(SMS_MESSAGE));
+          if (useSendgrid) promises.push(sendgrid.send(EMAIL_MESSAGE));
+          const responses = await Promise.all(promises);
+          info(`ALERT(S) sent successfully.`, name);
+          
           info(
-            `Email sent! SendGrid Response:\n\r${JSON.stringify(
-              response,
+            `Alerts sent! Service responses:\n\r${JSON.stringify(
+              responses,
               undefined,
               "\t"
             )}`,
@@ -193,7 +227,7 @@ async function attemptToBook({ page, name }) {
           );
           info(`Standing by...`, name);
         }
-        EMAIL_SENT = true;
+        ALERTS_SENT = true;
       } catch (error) {
         info(error, name);
         if (error.response) {
