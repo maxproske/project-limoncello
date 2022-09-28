@@ -171,7 +171,6 @@ async function checkUrl({ page, name }, url) {
   return result.includes(url);
 }
 
-
 async function doLogin(page, name) {
   let count = 0;
   let maxCount = 5;
@@ -188,6 +187,7 @@ async function doLogin(page, name) {
       }
       // Check if the form is displayed
       if (await page.$(SELECTORS.LOGIN_EMAIL)) {
+        page.bringToFront();
         await page.type(SELECTORS.LOGIN_EMAIL, USERNAME);
         await page.type(SELECTORS.LOGIN_PASS, PASSWORD);
         info(`Clicking login button...`, name);
@@ -210,7 +210,6 @@ async function doLogin(page, name) {
       }
     } catch (e) {
       info(`Error while attempting to re-login. Retrying...`, name);
-      await page.bringToFront();
       if (count >= maxCount) {
         info(`Maximum attempts reached due to error.`, name);
         return false;
@@ -221,8 +220,6 @@ async function doLogin(page, name) {
 
 async function tryLogin(pages, browser) {
   const { page, name } = pages[0];
-  await page.bringToFront();
-
   const successfulLogin  = await doLogin(page, name);
   if (!successfulLogin) {
     info(`Login unsuccessful. Exiting...`, name);
