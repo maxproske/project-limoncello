@@ -44,9 +44,14 @@ if (useSendgrid) {
 }
 
 // Config
-const NUM_TABS = 2;
+const NUM_TABS_PER_PAGE = 1;
 const NUM_ATTEMPTS = -1; // Set to -1 to attempt indefinitely
-const ACTUALLY_SEND_ALERTS = false;
+const ACTUALLY_SEND_ALERTS = true;
+// *******************************************************
+// *   Booking form data                                 *
+// *   You may need to add, remove or update the options *
+// *   to match the booking form(s) for your consulate   *
+// *******************************************************
 const COUNTRY = 'United States';
 const MARITAL_STATUS_OPTIONS = {
   'Married': '13',
@@ -72,14 +77,25 @@ const GOTO_OPTIONS = {
 };
 const SECONDS_BETWEEN_TRIES = 5;
 
+// ********************************************************
+// *   BOOKING_PAGES URLs BELOW MAY NEED TO BE MODIFIED   *
+// ********************************************************
 const URLS = {
   LOGIN: "https://prenotami.esteri.it/Home",
   LANDING: "https://prenotami.esteri.it/UserArea",
-  BOOKING: "https://prenotami.esteri.it/Services/Booking/672", //672 is real URL, 660 is test, 929 is for future appointments
-  BOOKING_2: "https://prenotami.esteri.it/Services/Booking/929", //672 is real URL, 660 is test, 929 is for future appointments
+  // These are the San Francisco consulate booking pages.
+  // Amend these with links to your citizenship page(s).
+  BOOKING_PAGES: [ //672 is real URL, 660 is test, 929 is for future appointments
+    "https://prenotami.esteri.it/Services/Booking/672",
+    "https://prenotami.esteri.it/Services/Booking/929",
+  ],
   BOOKING_CALENDAR: "https://prenotami.esteri.it/BookingCalendar",
 }
 
+// ********************************************************
+// *   THESE SELECTORS MAY NOT MATCH THE FORM FIELDS FOR  *
+// *   YOUR CONSULATE PAGE(S). PLEASE VERIFY BEFORE USE.  *
+// ********************************************************
 const SELECTORS = {
   LOGIN_EMAIL: "#login-email",
   LOGIN_PASS: "#login-password",
@@ -96,6 +112,15 @@ const SELECTORS = {
   AVAILABLE_DAY_BUTTON: "td.availableDay",
 };
 
+function getBookingPageUrl(pageNum) {
+  const pageUrls = [];
+  for (let i = 0; i < NUM_TABS_PER_PAGE; i++) {
+    pageUrls.push(URLS.BOOKING_PAGES);
+  }
+  // flatten array
+  return pageUrls.flat()[pageNum - 1];
+}
+
 function info(message, pageName = undefined) {
   const timestamp = new Date(Date.now()).toTimeString().slice(0, 8);
   console.info(`${timestamp}: ${pageName ? `${pageName} - ` : ""}${message}`);
@@ -103,8 +128,8 @@ function info(message, pageName = undefined) {
 
 async function createTabs(browser) {
   const pagePromises = [];
-
-  for (let i = 0; i < NUM_TABS; ++i) {
+  const numTabs = NUM_TABS_PER_PAGE * URLS.BOOKING_PAGES.length;
+  for (let i = 0; i < numTabs; ++i) {
     info(`Creating Promise for page #${i}...`);
     pagePromises.push(browser.newPage());
   }
@@ -121,13 +146,6 @@ async function createTabs(browser) {
     info(`Page #${i} created from Promise.`);
     i++;
     page.setDefaultNavigationTimeout(0);
-    info(`Setting English language cookie for page #${i}.`);
-    await page.setCookie({
-      name: "_Culture",
-      value: "2",
-      domain: 'prenotami.esteri.it',
-      session: true,
-    });
     info(`Setting alert box auto-OK behavior for page #${i}.`);
     page.on('dialog', async dialog => {
       //get alert message
@@ -245,6 +263,7 @@ async function checkForGlobalSuccess({ page, name }) {
 
   info(`Calendar page reached in ${SUCCESS_PAGE}; closing...`, name);
   if (!checkUrl({ page, name }, URLS.BOOKING_CALENDAR)) {
+    info(`Closing non-calendar page...`, name);
     await page.close();
     info(`Page successfully closed.`, name);
   }
@@ -288,8 +307,8 @@ async function doSendAlerts(name) {
 
 async function attemptToBook({ page, name }, pageNum, browser) {
   info(`Attempting to book appointment on page #${pageNum}...`, name);
-  const { BOOKING, BOOKING_2, LOGIN } = URLS;
-  const bookingPage = pageNum % 2 == 0 ? BOOKING : BOOKING_2;
+  const { LOGIN } = URLS;
+  const bookingPage = getBookingPageUrl(pageNum);
 
   let attempts = 0;
   let retries = 0;
@@ -297,6 +316,13 @@ async function attemptToBook({ page, name }, pageNum, browser) {
   let runScript = true;
   while (runScript) {
     try {
+      info(`Setting English language cookie for page #${pageNum}.`);
+      await page.setCookie({
+        name: "_Culture",
+        value: "2",
+        domain: 'prenotami.esteri.it',
+        session: true,
+      });
       if (await checkForGlobalSuccess({ page, name })) return false;
 
       if (NUM_ATTEMPTS >= 0) {
