@@ -81,6 +81,10 @@ const ADULT_CHILDREN = '0';
 // When set to false, there will be no delay between clicks
 const OFF_HOURS = true;
 
+// These waits will be obeyed if `OFF_HOURS` is set to `true`
+const SECONDS_BETWEEN_PAGE_ATTEMPTS = 5;
+const SECONDS_BETWEEN_CALENDAR_NEXT_CLICKS = 3;
+
 // Global vars
 let SUCCESS = false;
 let SUCCESS_PAGE = "";
@@ -89,9 +93,6 @@ let SUCCESS_PAGE = "";
 const GOTO_OPTIONS = {
   waitUntil: "networkidle2",
 };
-// Modify t
-const SECONDS_BETWEEN_PAGE_ATTEMPTS = 5;
-const SECONDS_BETWEEN_CALENDAR_NEXT_CLICKS = 3;
 
 // ********************************************************
 // *   BOOKING_PAGES URLs BELOW MAY NEED TO BE MODIFIED   *
