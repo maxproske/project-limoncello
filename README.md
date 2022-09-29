@@ -2,14 +2,15 @@
 Originally forked from https://github.com/drewhershey/italian-consulate-website-automation
 
 This fork:
-Supports SMS notifications via Twilio
-Autofills the booking form
-Auto traverses the calendar to find an open appointment
-Restarts the script if it fails/crashes
+- Supports SMS notifications via Twilio
+- Autofills the booking form with data provided by you
+- Auto traverses the calendar to find an open appointment
+- Restarts the script if it fails/crashes (via `forever`)
+- Includes an `OFF_HOURS` boolean switch for pausing briefly between navigations and clicks. This avoids hitting the consulate website too hard with requests when lightning fast reflexes should not be necessary.
 
-This project uses Puppeteer to script browser interactions to automate the apppointment booking process on the Italian Consulate webiste.
+This project uses Puppeteer to script browser interactions to automate the apppointment booking process on the Italian Consulate webiste. This is a modified version of the original script by @drewhershey.
 
-The process for obtaining an appointment for citizenship recognition is notoriously difficult and time consuming. This project hopes to simplify it somewhat, while adding its own hurdles in the form of: booking forms that may deviate from the form this script expects, requiring some hand-tooling of the CSS selectors and adding selectors for form fields that may exist in the form you encounter during the booking process.
+The process for obtaining an appointment for citizenship recognition is notoriously difficult and time consuming. This script hopes to simplify it somewhat, while adding its own hurdles in the form of: booking forms that may deviate from the form this script expects, requiring some hand-tooling of the CSS selectors and adding selectors and inputs for form fields that may exist in the specific form _you_ encounter during the booking process.
 
 ## What this script does:
 
@@ -32,3 +33,5 @@ To stop the script:
 
 To view the logs:
 `npm run logs`
+
+You will need a Twilio account or SendGrid account and the required secrets in order to receive SMS/Email alerts when the script succeeds in finding an open appointment.
