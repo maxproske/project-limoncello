@@ -25,12 +25,13 @@ let EMAIL_MESSAGE;
 
 const useTwilio = TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN;
 const useSendgrid = SENDGRID_API_KEY && EMAIL_TO && EMAIL_FROM;
+const SUCCESS_MESSAGE = 'SUCCESS! Italy Site Script has found an open appointment. GO GO GO!'
 if (useTwilio) {
   twilio = Twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
   SMS_MESSAGE = {
     to: MY_PHONE_NUMBER,
     from: TWILIO_PHONE_NUMBER,
-    body: `SUCCESS! Italy Site Script has reached booking page. GO GO GO!`,
+    body: SUCCESS_MESSAGE,
   }
 }
 if (useSendgrid) {
@@ -38,7 +39,7 @@ if (useSendgrid) {
   EMAIL_MESSAGE = {
     to: EMAIL_TO,
     from: EMAIL_FROM,
-    subject: "ITALY SITE SCRIPT HAS REACHED BOOKING PAGE",
+    subject: SUCCESS_MESSAGE,
     text: "GO GO GO GO GO GO GO GO GO",
   };
 }
@@ -49,7 +50,7 @@ const NUM_ATTEMPTS = -1; // Set to -1 to attempt indefinitely
 const ACTUALLY_SEND_ALERTS = true;
 // Set MAX_CALENDAR_MONTHS_TO_CHECK to a number of months equal to or greater than
 // the last _unavailable_ slot you encounter while attempting to
-// book. For SF, this is currently somewhere  in 2027.
+// book. For SF, this is currently somewhere in 2027.
 // If you're unsure, set this for something like 7 years (84 months)
 const MAX_CALENDAR_MONTHS_TO_CHECK = 72;
 // *******************************************************
@@ -210,6 +211,10 @@ async function doLogin(page, name) {
         await page.type(SELECTORS.LOGIN_PASS, PASSWORD);
         info(`Clicking login button...`, name);
         await page.click(SELECTORS.LOGIN_BUTTON);
+        if (await checkUrl({ page, name }, URLS.LANDING)) {
+          info(`Already logged in.`, name);
+          return true;
+        }
         info(`Waiting for navigation to complete...`, name);
         await page.waitForNavigation(GOTO_OPTIONS);
       }
@@ -218,10 +223,10 @@ async function doLogin(page, name) {
       if (loggedIn) {
         info(`Login successful. Restarting page actions.`);
         return true;
-      } else {
-        info(`Login unsuccessful. Retrying...`, name);
-        count++;
       }
+      info(`Login unsuccessful. Retrying...`, name);
+      count++;
+
       if (count >= maxCount) {
         info(`Login unsuccessful. Max retries reached.`, name);
         return false;
