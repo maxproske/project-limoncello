@@ -45,9 +45,23 @@ if (useSendgrid) {
 }
 
 // Config
-const NUM_TABS_PER_PAGE = 1;
+const NUM_TABS_PER_PAGE = 10;
 const NUM_ATTEMPTS = -1; // Set to -1 to attempt indefinitely
+// Once each weekday, the consulate releases appointments at midnight
+// Italy time. During this period, we should not wait between clicks.
+// Off-hours, when appointments may free up during the day or night, we
+// should pause between clicks so as not to hammer the consulate site
+// with requests.
+// Set this to true to pause between clicks during off-hours.
+// When set to false, there will be no delay between clicks
+const OFF_HOURS = false;
+
+// These waits will be obeyed if `OFF_HOURS` is set to `true`
+const SECONDS_BETWEEN_PAGE_ATTEMPTS = 5;
+const SECONDS_BETWEEN_CALENDAR_NEXT_CLICKS = 3;
+
 const ACTUALLY_SEND_ALERTS = true;
+
 // Set MAX_CALENDAR_MONTHS_TO_CHECK to a number of months equal to or greater than
 // the last _unavailable_ slot you encounter while attempting to
 // book. For SF, this is currently somewhere in 2027.
@@ -73,18 +87,6 @@ const MARITAL_STATUS_OPTIONS = {
 const MARITAL_STATUS = MARITAL_STATUS_OPTIONS['Married'];
 const ADULT_CHILDREN = '0';
 
-// Once each weekday, the consulate releases appointments at midnight
-// Italy time. During this period, we should not wait between clicks.
-// Off-hours, when appointments may free up during the day or night, we
-// should pause between clicks so as not to hammer the consulate site
-// with requests.
-// Set this to true to pause between clicks during off-hours.
-// When set to false, there will be no delay between clicks
-const OFF_HOURS = true;
-
-// These waits will be obeyed if `OFF_HOURS` is set to `true`
-const SECONDS_BETWEEN_PAGE_ATTEMPTS = 5;
-const SECONDS_BETWEEN_CALENDAR_NEXT_CLICKS = 3;
 
 // Global vars
 let SUCCESS = false;
@@ -104,7 +106,7 @@ const URLS = {
   // These are the San Francisco consulate booking pages.
   // Amend these with links to your citizenship page(s).
   BOOKING_PAGES: [ //672 is real URL, 660 is test, 929 is for future appointments
-    "https://prenotami.esteri.it/Services/Booking/672",
+    // "https://prenotami.esteri.it/Services/Booking/672",
     "https://prenotami.esteri.it/Services/Booking/929",
   ],
   BOOKING_CALENDAR: "https://prenotami.esteri.it/BookingCalendar",
@@ -275,7 +277,7 @@ async function removeNonCalendarTabsOnSuccess({ page, name }) {
 }
 
 async function timeout(override) {
-  const seconds = override || SECONDS_BETWEEN_TRIES;
+  const seconds = override || SECONDS_BETWEEN_PAGE_ATTEMPTS;
   return new Promise((resolve) => setTimeout(resolve, seconds * 1000));
 }
 
