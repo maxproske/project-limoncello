@@ -19,6 +19,7 @@
     "eslint-plugin-node": "^11.1.0",
     "eslint-plugin-prettier": "^4.0.0",
     "eslint-plugin-promise": "^6.0.0",
+    "forever": "^4.0.3",
     "prettier": "^2.6.2",
     "puppeteer-core": "^18.0.5"
   },
@@ -26,6 +27,8 @@
     "node": ">=16.0.0"
   },
   "scripts": {
-    "start": "node index.js"
+    "start": "forever start index.js",
+    "stop": "forever stopall",
+    "logs": "forever logs index.js -f"
   }
 }

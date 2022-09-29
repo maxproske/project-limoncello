@@ -26,3 +26,9 @@ it clicks on that appointment and the stops the script, allowing you to manually
 
 To start the script:
 `npm run start`
+
+To stop the script:
+`npm run stop`
+
+To view the logs:
+`npm run logs`
