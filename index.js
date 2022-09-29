@@ -47,6 +47,11 @@ if (useSendgrid) {
 const NUM_TABS_PER_PAGE = 1;
 const NUM_ATTEMPTS = -1; // Set to -1 to attempt indefinitely
 const ACTUALLY_SEND_ALERTS = true;
+// Set MAX_CALENDAR_MONTHS_TO_CHECK to a number of months equal to or greater than
+// the last _unavailable_ slot you encounter while attempting to
+// book. For SF, this is currently somewhere  in 2027.
+// If you're unsure, set this for something like 7 years (84 months)
+const MAX_CALENDAR_MONTHS_TO_CHECK = 72;
 // *******************************************************
 // *   Booking form data                                 *
 // *   You may need to add, remove or update the options *
@@ -67,6 +72,15 @@ const MARITAL_STATUS_OPTIONS = {
 const MARITAL_STATUS = MARITAL_STATUS_OPTIONS['Married'];
 const ADULT_CHILDREN = '0';
 
+// Once each weekday, the consulate releases appointments at midnight
+// Italy time. During this period, we should not wait between clicks.
+// Off-hours, when appointments may free up during the day or night, we
+// should pause between clicks so as not to hammer the consulate site
+// with requests.
+// Set this to true to pause between clicks during off-hours.
+// When set to false, there will be no delay between clicks
+const OFF_HOURS = true;
+
 // Global vars
 let SUCCESS = false;
 let SUCCESS_PAGE = "";
@@ -75,7 +89,9 @@ let SUCCESS_PAGE = "";
 const GOTO_OPTIONS = {
   waitUntil: "networkidle2",
 };
-const SECONDS_BETWEEN_TRIES = 5;
+// Modify t
+const SECONDS_BETWEEN_PAGE_ATTEMPTS = 5;
+const SECONDS_BETWEEN_CALENDAR_NEXT_CLICKS = 3;
 
 // ********************************************************
 // *   BOOKING_PAGES URLs BELOW MAY NEED TO BE MODIFIED   *
@@ -108,7 +124,7 @@ const SELECTORS = {
   APPOINTMENT_BOX: "#divAppuntamenti",
   CALENDAR: "#loader-content",
   LOADING_SPINNER: "#loader-facility",
-  CALENDAR_NEXT_MONTH: "#datetimepicker > div > ul > ul > div > div.datepicker-days > table > thead > tr:nth-child(1) > th.dtpicker-next",
+  NEXT_MONTH_BUTTON: '[data-action="next"]',
   AVAILABLE_DAY_BUTTON: "td.availableDay",
 };
 
@@ -160,28 +176,11 @@ async function createTabs(browser) {
   return pages;
 }
 
-async function fillOutPassportPage({page, name}) {
-  await page.select('#ddls_0', '1');
-  await page.select('#ddls_1', '11');
-  await page.type('#DatiAddizionaliPrenotante_2___testo', '2');
-  await page.type('#DatiAddizionaliPrenotante_3___testo', 'Charles Azzarello');
-  await page.type('#DatiAddizionaliPrenotante_4___testo', 'Italian Consulate NYC');
-  await page.type('#DatiAddizionaliPrenotante_5___testo', '123 Main St, New York, NY 10001');
-  await page.type('#DatiAddizionaliPrenotante_6___testo', 'USA');
-  await page.type('#DatiAddizionaliPrenotante_7___testo', '172');
-  await page.type('#DatiAddizionaliPrenotante_8___testo', 'brown');
-  await page.type('#DatiAddizionaliPrenotante_9___data', '10012023');
-  await page.click(SELECTORS.BOOKING_FORM_SUBMIT);
-  await timeout(1);
-
-  await page.waitForNavigation(GOTO_OPTIONS);
-}
-
 async function checkUrl({ page, name }, url) {
   info(`Awaiting page URL to compare against ${url}...`, name);
   const result = await page.url();
   info(
-    `Page URL resolved: Current URL is ${
+    `Page URL resolved: Current URL ${result} is ${
       result.includes(url) ? "equal to" : "not equal to"
     } ${url}`,
     name
@@ -258,16 +257,15 @@ async function doInAllTabs(action, pages, browser, message, name) {
   info(`${name} : All Promises resolved. Action complete.`);
 }
 
-async function checkForGlobalSuccess({ page, name }) {
+async function removeNonCalendarTabsOnSuccess({ page, name }) {
   if (!SUCCESS) return false;
 
-  info(`Calendar page reached in ${SUCCESS_PAGE}; closing...`, name);
   if (!checkUrl({ page, name }, URLS.BOOKING_CALENDAR)) {
+    info(`Calendar page reached in ${SUCCESS_PAGE}`);
     info(`Closing non-calendar page...`, name);
     await page.close();
     info(`Page successfully closed.`, name);
   }
-  return true;
 }
 
 async function timeout(override) {
@@ -276,8 +274,6 @@ async function timeout(override) {
 }
 
 async function doSendAlerts(name) {
-  SUCCESS = true;
-  SUCCESS_PAGE = name;
   info(`SUCCESS! Sending ALERT(S)...`, name);
   try {
     if (ACTUALLY_SEND_ALERTS) {
@@ -323,7 +319,7 @@ async function attemptToBook({ page, name }, pageNum, browser) {
         domain: 'prenotami.esteri.it',
         session: true,
       });
-      if (await checkForGlobalSuccess({ page, name })) return false;
+      removeNonCalendarTabsOnSuccess({ page, name });
 
       if (NUM_ATTEMPTS >= 0) {
         info(`Booking attempt: ${attempts + 1}`, name);
@@ -339,13 +335,10 @@ async function attemptToBook({ page, name }, pageNum, browser) {
       }
 
       info(`Awaiting navigation to booking URL...`, name);
-      await timeout();
+      await timeout(!OFF_HOURS ? 0 : SECONDS_BETWEEN_PAGE_ATTEMPTS);
       await page.goto(bookingPage, GOTO_OPTIONS);
-      // await page.bringToFront();
 
       info(`Navigation attempt complete.`, name);
-
-      if (await checkForGlobalSuccess({ page, name })) return false;
 
       if (await checkUrl({ page, name }, LOGIN)) {
         // If we find ourselves back at login, we need to re-login
@@ -363,37 +356,61 @@ async function attemptToBook({ page, name }, pageNum, browser) {
         // wait for appointment div to appear
         await page.waitForSelector(SELECTORS.APPOINTMENT_BOX, { visible: true, timeout: 0 });
         
-        // await fillOutPassportPage(page, name);
         // fill in form
+        await page.bringToFront();
         await page.type(SELECTORS.COUNTRY_INPUT, COUNTRY);
         await page.type(SELECTORS.NUMBER_ADULT_CHILDREN, ADULT_CHILDREN);
         await page.select(SELECTORS.MARITAL_DROPDOWN, MARITAL_STATUS);
         await page.click(SELECTORS.PRIVACY_CHECKBOX);
+        // need to bring to front so that the alert can be
+        // dismissed.
         await page.bringToFront();
         await page.click(SELECTORS.BOOKING_FORM_SUBMIT);
-        await timeout(1);
-
-        await page.waitForNavigation(GOTO_OPTIONS);
+        // if the page navigates before we can actually await it, check the url here
+        // and don't await the navigation if we're already on the calendar page
+        if (await checkUrl({ page, name }, URLS.BOOKING_CALENDAR)) {
+          info(`Calendar page reached.`);
+        } else {
+          info(`Awaiting navigation to calendar page...`);
+          await page.waitForNavigation(GOTO_OPTIONS);
+        }
       }
 
       if (await checkUrl({ page, name }, URLS.BOOKING_CALENDAR)) {
+        info(`Calendar page reached`);
         SUCCESS = true;
         SUCCESS_PAGE = name;
         await page.bringToFront();
 
         // wait for calendar to display
-        while (true) {
+        let calendarPages = 1;
+        let flipCalendar = true;
+        while (flipCalendar) {
+          info(`Waiting for calendar to load...`);
           await page.waitForSelector(SELECTORS.CALENDAR, { visible: true, timeout: 0 });
+          info(`Calendar loaded!`);
+
           // Check for available appointments
           const availableAppointments = await page.$$(SELECTORS.AVAILABLE_DAY_BUTTON);
           if (availableAppointments.length > 0) {
             info(`APPOINTMENT FOUND!!! Sending alert...`, name);
-            await doSendAlerts(page, name);
-            return true;
+            await doSendAlerts(name);
+            // returning false here will stop the script so the user
+            // can manually book the appointment
+            return false;
           } else {
             info(`No available appointments found. Going to next month...`, name);
-            await page.click(SELECTORS.CALENDAR_NEXT_MONTH);
-            await page.waitForSelector(SELECTORS.LOADING_SPINNER, { hidden: true, timeout: 0 });
+            const nextMonthButton = await page.$(SELECTORS.NEXT_MONTH_BUTTON);
+            await timeout(!OFF_HOURS ? 0 : SECONDS_BETWEEN_CALENDAR_NEXT_CLICKS);
+            await nextMonthButton.click();
+            calendarPages++;
+          }
+
+          if (calendarPages > MAX_CALENDAR_MONTHS_TO_CHECK) {
+            // assume there are no slots available past this point
+            info(`No appointments found for the next ${MAX_CALENDAR_MONTHS_TO_CHECK}. Going back to booking page for another attempt`, name);
+            flipCalendar = false;
+            await page.goto(bookingPage, GOTO_OPTIONS);
           }
         }
       }
