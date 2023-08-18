@@ -463,6 +463,7 @@ async function startScript() {
   const browser = await puppeteer.launch({
     headless: true,
     defaultViewport: { isLandscape: true, width: 1920, height: 1080 },
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
   });
   const tabs = await createTabs(browser);
 
