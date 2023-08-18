@@ -17,19 +17,26 @@ const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
 const TWILIO_PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER;
-const MY_PHONE_NUMBER = process.env.MY_PHONE_NUMBER;
+const MY_PHONE_NUMBER_1 = process.env.MY_PHONE_NUMBER_1;
+const MY_PHONE_NUMBER_2 = process.env.MY_PHONE_NUMBER_2;
 
 let twilio;
-let SMS_MESSAGE;
+let SMS_MESSAGE_1;
+let SMS_MESSAGE_2;
 let EMAIL_MESSAGE;
 
 const useTwilio = TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN;
 const useSendgrid = SENDGRID_API_KEY && EMAIL_TO && EMAIL_FROM;
-const SUCCESS_MESSAGE = 'SUCCESS! Italy Site Script has found an open appointment. GO GO GO!'
+const SUCCESS_MESSAGE = 'An Italy Visa interview slot is available. GO GO GO! https://prenotami.esteri.it/Services'
 if (useTwilio) {
   twilio = Twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
-  SMS_MESSAGE = {
-    to: MY_PHONE_NUMBER,
+  SMS_MESSAGE_1 = {
+    to: MY_PHONE_NUMBER_1,
+    from: TWILIO_PHONE_NUMBER,
+    body: SUCCESS_MESSAGE,
+  }
+  SMS_MESSAGE_2 = {
+    to: MY_PHONE_NUMBER_2,
     from: TWILIO_PHONE_NUMBER,
     body: SUCCESS_MESSAGE,
   }
@@ -40,12 +47,12 @@ if (useSendgrid) {
     to: EMAIL_TO,
     from: EMAIL_FROM,
     subject: SUCCESS_MESSAGE,
-    text: "GO GO GO GO GO GO GO GO GO",
+    text: "An Italy Visa interview slot is available. GO GO GO!",
   };
 }
 
 // Config
-const NUM_TABS_PER_PAGE = 10;
+const NUM_TABS_PER_PAGE = 1;
 const NUM_ATTEMPTS = -1; // Set to -1 to attempt indefinitely
 // Once each weekday, the consulate releases appointments at midnight
 // Italy time. During this period, we should not wait between clicks.
@@ -54,7 +61,7 @@ const NUM_ATTEMPTS = -1; // Set to -1 to attempt indefinitely
 // with requests.
 // Set this to true to pause between clicks during off-hours.
 // When set to false, there will be no delay between clicks
-const OFF_HOURS = false;
+const OFF_HOURS = true;
 
 // These waits will be obeyed if `OFF_HOURS` is set to `true`
 const SECONDS_BETWEEN_PAGE_ATTEMPTS = 5;
@@ -72,7 +79,7 @@ const MAX_CALENDAR_MONTHS_TO_CHECK = 72;
 // *   You may need to add, remove or update the options *
 // *   to match the booking form(s) for your consulate   *
 // *******************************************************
-const COUNTRY = 'United States';
+const COUNTRY = 'Canada';
 const MARITAL_STATUS_OPTIONS = {
   'Married': '13',
   'Divorced': '14',
@@ -84,7 +91,7 @@ const MARITAL_STATUS_OPTIONS = {
   'Divorced Civil Union': '20',
   'Widowed Civil Union': '21',
 };
-const MARITAL_STATUS = MARITAL_STATUS_OPTIONS['Married'];
+const MARITAL_STATUS = MARITAL_STATUS_OPTIONS['Single'];
 const ADULT_CHILDREN = '0';
 
 
@@ -107,7 +114,8 @@ const URLS = {
   // Amend these with links to your citizenship page(s).
   BOOKING_PAGES: [ //672 is real URL, 660 is test, 929 is for future appointments
     // "https://prenotami.esteri.it/Services/Booking/672",
-    "https://prenotami.esteri.it/Services/Booking/929",
+    "https://prenotami.esteri.it/Services/Booking/3476",
+    "https://prenotami.esteri.it/Services/Booking/4659",
   ],
   BOOKING_CALENDAR: "https://prenotami.esteri.it/BookingCalendar",
 }
@@ -162,7 +170,10 @@ async function createTabs(browser) {
   let i = 0;
   for (const pagePromise of pagePromises) {
     info(`Awaiting page #${i} creation from Promise...`);
+
     const page = await pagePromise;
+    await page.setUserAgent('Your Custom User Agent String Here');
+
     info(`Page #${i} created from Promise.`);
     i++;
     page.setDefaultNavigationTimeout(0);
@@ -201,6 +212,7 @@ async function doLogin(page, name) {
       info(`Navigating to login page...`, name);
       // navigate to clean login route
       await page.goto(URLS.LOGIN, GOTO_OPTIONS);
+
       // If we're redirected to the landing page, we're already logged in
       if (await checkUrl({ page, name }, URLS.LANDING)) {
         info(`Already logged in.`, name);
@@ -286,7 +298,8 @@ async function doSendAlerts(name) {
   try {
     if (ACTUALLY_SEND_ALERTS) {
       let promises = [];
-      SMS_MESSAGE && promises.push(twilio.messages.create(SMS_MESSAGE));
+      SMS_MESSAGE_1 && promises.push(twilio.messages.create(SMS_MESSAGE_1));
+      SMS_MESSAGE_2 && promises.push(twilio.messages.create(SMS_MESSAGE_2));
       EMAIL_MESSAGE && promises.push(sendgrid.send(EMAIL_MESSAGE));
       const responses = await Promise.all(promises);
       info(`ALERT(S) sent successfully.`, name);
@@ -359,8 +372,14 @@ async function attemptToBook({ page, name }, pageNum, browser) {
         }
       }
 
-      if (await checkUrl({ page, name }, bookingPage)) {
+      const isBookingPageReached = await checkUrl({ page, name }, bookingPage)
+      if (isBookingPageReached) {
         info(`Booking page reached`);
+
+        await doSendAlerts(name);
+        runScript = false;
+        return false;
+
         // wait for appointment div to appear
         await page.waitForSelector(SELECTORS.APPOINTMENT_BOX, { visible: true, timeout: 0 });
         
@@ -442,7 +461,7 @@ async function attemptToBook({ page, name }, pageNum, browser) {
 
 async function startScript() {
   const browser = await puppeteer.launch({
-    headless: false,
+    headless: true,
     defaultViewport: { isLandscape: true, width: 1920, height: 1080 },
   });
   const tabs = await createTabs(browser);
